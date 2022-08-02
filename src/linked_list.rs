@@ -1,7 +1,7 @@
 use std::ptr::NonNull;
 use std::marker::PhantomData;
 
-use crate::node::{Node, NodeLink};
+use crate::node::{Node, NodeLink, NodeLinkSome, NodeAccess};
 
 
 pub struct LinkedList<T> {
@@ -28,44 +28,61 @@ impl<T> LinkedList<T> {
         self.iter().count()
     }
 
+    fn new_node_link(data: T) -> NodeLinkSome<T> {
+        let new_node = Box::new(Node::<T>::new(data));
+        unsafe {
+            NonNull::new_unchecked(Box::into_raw(new_node))
+        }
+    }
+
     pub fn push_front(&mut self, data: T) {
 
-        let new_node = Box::new(Node::<T>::new(data));
-        let new_head = unsafe { NonNull::new_unchecked(Box::into_raw(new_node)) };
+        let new_head = Some(Self::new_node_link(data));
 
         unsafe {
-            (*new_head.as_ptr()).next = self.head;
+            (*new_head.unwrap().as_ptr()).next = self.head;
 
-            self.head = Some(new_head);
+            if self.head.is_none() {
+                self.foot = new_head;
+            }
+
+            self.head = new_head;
+
         }
-
     }
 
     pub fn push_back(&mut self, data: T) {
+        let new_foot = Some(Self::new_node_link(data));
 
+        unsafe {
+            if let Some(foot) = self.foot
+            {
+                // Maybe implement next(), previos() and data() as macro?
+                (*foot.as_ptr()).next = new_foot;
+            }
+            else
+            {
+                self.head = new_foot;
+            }
+
+            self.foot = new_foot;
+        }
     }
 
-    pub fn iter<'a>(&'a self) -> Iter<'a, T>
+    pub fn iter(&'_ self) -> Iter<'_, T>
     {
         Iter {
             current: self.head,
-            dummy: PhantomData,
+            _phanton: PhantomData,
         }
     }
 }
 
-fn get_node_data<'a, T>(node: &NonNull<Node<T>>) -> &'a T {
-    unsafe { &(*node.as_ptr()).data }
-}
-
-fn get_next<'a, T>(node: &NonNull<Node<T>>) -> NodeLink<T> {
-    unsafe {(*node.as_ptr()).next }
-}
 
 pub struct Iter<'a, T>
 {
     current: NodeLink<T>,
-    dummy: PhantomData<&'a T>,
+    _phanton: PhantomData<&'a T>,
 }
 
 impl <'a, T> Iterator for Iter<'a, T> {
@@ -75,10 +92,10 @@ impl <'a, T> Iterator for Iter<'a, T> {
 
         if let Some(node) = &self.current
         {
-            let data = get_node_data(node);
-            self.current = get_next(node);
+            let data = node.data();
+            self.current = node.next();
 
-            return Some(&data)
+            return Some(data)
         }
 
         None
@@ -108,16 +125,27 @@ mod tests {
     }
 
     #[test]
+    fn test_push_back() {
+        let mut linked_list = LinkedList::<u32>::new();
+
+        linked_list.push_back(1337);
+        assert_eq!(linked_list.len(), 1);
+        linked_list.push_back(42);
+        assert_eq!(linked_list.len(), 2);
+    }
+
+    #[test]
     fn test_iter() {
         let mut linked_list = LinkedList::<u32>::new();
         linked_list.push_front(1337);
         linked_list.push_front(42);
+        linked_list.push_back(666);
 
         let mut linked_list_iter = linked_list.iter();
         assert_eq!(linked_list_iter.next(), Some(&42));
         assert_eq!(linked_list_iter.next(), Some(&1337));
+        assert_eq!(linked_list_iter.next(), Some(&666));
         assert_eq!(linked_list_iter.next(), None);
-
     }
 
 }
