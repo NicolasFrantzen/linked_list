@@ -1,7 +1,9 @@
 use std::ptr::NonNull;
 use std::marker::PhantomData;
+use std::mem;
 
-use crate::node::{Node, NodeLink, NodeLinkSome, NodeAccess};
+use crate::node::{Node, NodeLink, NodeLinkSome};
+use crate::{next, next_unsafe, previous, data};
 
 
 pub struct LinkedList<T> {
@@ -37,36 +39,41 @@ impl<T> LinkedList<T> {
 
     pub fn push_front(&mut self, data: T) {
 
-        let new_head = Some(Self::new_node_link(data));
+        let new_head = Self::new_node_link(data);
 
-        unsafe {
-            (*new_head.unwrap().as_ptr()).next = self.head;
+        unsafe { next_unsafe!(new_head) = self.head; }
 
-            if self.head.is_none() {
-                self.foot = new_head;
-            }
-
-            self.head = new_head;
-
+        if self.head.is_none() {
+            self.foot = Some(new_head);
         }
+
+        self.head = Some(new_head);
+
     }
 
     pub fn push_back(&mut self, data: T) {
         let new_foot = Some(Self::new_node_link(data));
 
-        unsafe {
-            if let Some(foot) = self.foot
-            {
-                // Maybe implement next(), previos() and data() as macro?
-                (*foot.as_ptr()).next = new_foot;
-            }
-            else
-            {
-                self.head = new_foot;
-            }
-
-            self.foot = new_foot;
+        if let Some(foot) = self.foot
+        {
+            unsafe{ next_unsafe!(foot) = new_foot; }
         }
+        else
+        {
+            self.head = new_foot;
+        }
+
+        self.foot = new_foot;
+    }
+
+    pub fn pop_front(&mut self) -> Option<T> {
+        self.head.map(|node| unsafe {
+            Box::from_raw(node.as_ptr()).data
+        })
+    }
+
+    pub fn pop_back(&mut self) -> T {
+        todo!()
     }
 
     pub fn iter(&'_ self) -> Iter<'_, T>
@@ -78,6 +85,11 @@ impl<T> LinkedList<T> {
     }
 }
 
+pub struct Cursor<'a, T>
+{
+    current: NodeLink<T>,
+    list: &'a LinkedList<T>,
+}
 
 pub struct Iter<'a, T>
 {
@@ -89,16 +101,11 @@ impl <'a, T> Iterator for Iter<'a, T> {
     type Item = &'a T;
 
     fn next(&mut self) -> Option<Self::Item> {
+        self.current.map(|node| {
+            self.current = next!(node);
 
-        if let Some(node) = &self.current
-        {
-            let data = node.data();
-            self.current = node.next();
-
-            return Some(data)
-        }
-
-        None
+            data!(node)
+        })
     }
 }
 
