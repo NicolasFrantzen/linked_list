@@ -1,7 +1,6 @@
 use std::ptr::NonNull;
 
 
-
 pub type NodeLinkSome<T> = NonNull<Node<T>>;
 pub type NodeLink<T> = Option<NodeLinkSome<T>>;
 
