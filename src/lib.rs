@@ -16,29 +16,29 @@ macro_rules! data {
 }
 
 #[macro_export(local_inner_macros)]
-macro_rules! next_unsafe {
+macro_rules! next {
     ($node:ident) => (
         (*$node.as_ptr()).next
     );
 }
 
 #[macro_export(local_inner_macros)]
-macro_rules! next {
+macro_rules! next_unsafe {
     ($node:ident) => (
-        unsafe{ next_unsafe!($node) }
-    );
-}
-
-#[macro_export(local_inner_macros)]
-macro_rules! previous_unsafe {
-    ($node:ident) => (
-        (*$node.as_ptr()).previous
+        unsafe{ next!($node) }
     );
 }
 
 #[macro_export(local_inner_macros)]
 macro_rules! previous {
     ($node:ident) => (
-        unsafe { previous_unsafe!($node) }
+        (*$node.as_ptr()).previous
+    );
+}
+
+#[macro_export(local_inner_macros)]
+macro_rules! previous_unsafe {
+    ($node:ident) => (
+        unsafe { previous!($node) }
     );
 }

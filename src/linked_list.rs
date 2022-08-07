@@ -1,9 +1,8 @@
 use std::ptr::NonNull;
 use std::marker::PhantomData;
-use std::mem;
 
 use crate::node::{Node, NodeLink, NodeLinkSome};
-use crate::{next, next_unsafe, previous, data, previous_unsafe};
+use crate::{next_unsafe, next, previous, data};
 
 
 pub struct LinkedList<T> {
@@ -51,12 +50,12 @@ impl<T> LinkedList<T> {
     pub fn pop_front(&mut self) -> Option<T> {
         self.head.map(|node| unsafe {
             // Set head to the current heads next node
-            self.head = next_unsafe!(node);
+            self.head = next!(node);
 
             // Set the new head previous to the old heads previous
             // I.e. at end of the list its None
             if let Some(head) = self.head {
-                previous_unsafe!(head) = previous_unsafe!(node);
+                previous!(head) = previous!(node);
             }
 
             // Restore the node as a box and move its data
@@ -78,12 +77,12 @@ impl<T> LinkedList<T> {
     pub fn pop_back(&mut self) -> Option<T> {
         self.foot.map(|node| unsafe {
             // Set foot to the current foods previous node
-            self.foot = previous_unsafe!(node);
+            self.foot = previous!(node);
 
             // Set the new foot next to the old heads next
             // I.e. at end of the list its None
             if let Some(foot) = self.foot {
-                next_unsafe!(foot) = next_unsafe!(node)
+                next!(foot) = next!(node)
             }
 
             // Restore the node as a box and move its data
@@ -132,13 +131,14 @@ impl<'a, T> Cursor<'a, T> {
         if let Some(head) = self.next {
             unsafe {
                 // Previous of self.head should be set to new_head
-                previous_unsafe!(head) = Some(new_head);
+                previous!(head) = Some(new_head);
 
                 // Update new head node next to point at old head
-                next_unsafe!(new_head) = Some(head);
+                next!(new_head) = Some(head);
             }
         }
 
+        // TODO: following should be made generic
         if self.next.is_none() {
             // If this is the first element, update foot as well
             self.list.foot = Some(new_head);
@@ -155,10 +155,10 @@ impl<'a, T> Cursor<'a, T> {
         if let Some(foot) = self.previous {
             unsafe {
                 // Previous of new_foot should be set to foot
-                previous_unsafe!(new_foot) = Some(foot);
+                previous!(new_foot) = Some(foot);
 
                 // Update foot next to new_foot
-                next_unsafe!(foot) = Some(new_foot);
+                next!(foot) = Some(new_foot);
             }
         }
 
@@ -184,7 +184,7 @@ impl <'a, T> Iterator for Iter<'a, T> {
 
     fn next(&mut self) -> Option<Self::Item> {
         self.current.map(|node| {
-            self.current = next!(node);
+            self.current = next_unsafe!(node);
 
             data!(node)
         })
