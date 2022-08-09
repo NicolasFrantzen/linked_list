@@ -38,13 +38,17 @@ impl<T> LinkedList<T> {
     }
 
     pub fn push_front(&mut self, data: T) {
-        Cursor{next: self.head, previous: self.foot, list: self}
-            .push_front(data);
+        Cursor{next: self.head, previous: None, list: self}
+            .push(data);
     }
 
     pub fn push_back(&mut self, data: T) {
-        Cursor{next: self.head, previous: self.foot, list: self}
-            .push_back(data);
+        Cursor{next: None, previous: self.foot, list: self}
+            .push(data);
+    }
+
+    pub fn insert(&mut self, _index: usize, _data: T) {
+        todo!()
     }
 
     pub fn pop_front(&mut self) -> Option<T> {
@@ -125,7 +129,7 @@ pub struct Cursor<'a, T>
 }
 
 impl<'a, T> Cursor<'a, T> {
-    pub fn push_front(&mut self, data: T) {
+    pub fn push(&mut self, data: T) {
         let new_head = LinkedList::new_node_link(data);
 
         if let Some(head) = self.next {
@@ -136,39 +140,34 @@ impl<'a, T> Cursor<'a, T> {
                 // Update new head node next to point at old head
                 next!(new_head) = Some(head);
             }
+
+            // Are we at the start of the list?
+            if self.next == self.list.head {
+                self.list.head = Some(new_head);
+            }
+        }
+        else if let Some(foot) = self.previous {
+            unsafe {
+                // Previous of new_foot should be set to foot
+                previous!(new_head) = Some(foot);
+
+                // Update foot next to new_foot
+                next!(foot) = Some(new_head);
+            }
+
+            // Are we at the end of the list?
+            if self.previous == self.list.foot {
+                self.list.foot = Some(new_head);
+            }
         }
 
-        // TODO: following should be made generic
-        if self.next.is_none() {
-            // If this is the first element, update foot as well
+        if self.list.head.is_none() && self.list.foot.is_none() {
+            // If this is the first element, just put it on the list
+            self.list.head = Some(new_head);
             self.list.foot = Some(new_head);
         }
 
         // Update head and length
-        self.list.head = Some(new_head);
-        self.list.length += 1;
-    }
-
-    pub fn push_back(&mut self, data: T) {
-        let new_foot = LinkedList::new_node_link(data);
-
-        if let Some(foot) = self.previous {
-            unsafe {
-                // Previous of new_foot should be set to foot
-                previous!(new_foot) = Some(foot);
-
-                // Update foot next to new_foot
-                next!(foot) = Some(new_foot);
-            }
-        }
-
-        if self.previous.is_none() {
-            // If this is the first element, update head as well
-            self.list.head = Some(new_foot);
-        }
-
-        // Update foot and length
-        self.list.foot = Some(new_foot);
         self.list.length += 1;
     }
 }
@@ -347,5 +346,19 @@ mod tests {
         assert_eq!(linked_list.pop_back(), None);
 
         assert_eq!(linked_list.iter().count(), 0);
+    }
+
+    #[test]
+    fn test_push_insert() {
+        let mut linked_list = LinkedList::<String>::new();
+        linked_list.push_back(String::from("foo"));
+        linked_list.push_back(String::from("bar"));
+        linked_list.insert(1, String::from("baz"));
+
+        let mut linked_list_iter = linked_list.iter();
+        assert_eq!(linked_list_iter.next().unwrap().as_str(), "foo");
+        assert_eq!(linked_list_iter.next().unwrap().as_str(), "bar");
+        assert_eq!(linked_list_iter.next().unwrap().as_str(), "baz");
+        assert_eq!(linked_list_iter.next(), None);
     }
 }
