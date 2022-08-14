@@ -4,6 +4,7 @@ use std::ptr::NonNull;
 pub type NodeLinkSome<T> = NonNull<Node<T>>;
 pub type NodeLink<T> = Option<NodeLinkSome<T>>;
 
+#[derive(Debug)]
 pub struct Node<T> {
     pub data: T,
     pub next: NodeLink<T>,

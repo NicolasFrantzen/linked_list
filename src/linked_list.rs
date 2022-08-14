@@ -2,9 +2,9 @@ use std::ptr::NonNull;
 use std::marker::PhantomData;
 
 use crate::node::{Node, NodeLink, NodeLinkSome};
-use crate::{next_unsafe, next, previous, data};
+use crate::{next_unsafe, next, previous, data, previous_unsafe};
 
-
+#[derive(Debug)]
 pub struct LinkedList<T> {
     head: NodeLink<T>,
     foot: NodeLink<T>,
@@ -38,17 +38,26 @@ impl<T> LinkedList<T> {
     }
 
     pub fn push_front(&mut self, data: T) {
-        Cursor{next: self.head, previous: None, list: self}
+        Cursor {next: self.head, previous: None, list: self}
             .push(data);
     }
 
     pub fn push_back(&mut self, data: T) {
-        Cursor{next: None, previous: self.foot, list: self}
+        Cursor {next: None, previous: self.foot, list: self}
             .push(data);
     }
 
-    pub fn insert(&mut self, _index: usize, _data: T) {
-        todo!()
+    pub fn insert(&mut self, index: usize, data: T) {
+        // Create cursor at front of the list
+        let mut cursor = Cursor {
+            next: self.head,
+            previous: None,
+            list: self
+        };
+
+        // Move the cursor next `index + 1` times
+        (0 .. index + 1).for_each(|_| cursor.move_next());
+        cursor.push(data);
     }
 
     pub fn pop_front(&mut self) -> Option<T> {
@@ -105,11 +114,19 @@ impl<T> LinkedList<T> {
         })
     }
 
-    pub fn iter(&'_ self) -> Iter<'_, T>
-    {
+    pub fn iter(&'_ self) -> Iter<'_, T> {
         Iter {
             current: self.head,
+            length: self.length,
             _phantom: PhantomData,
+        }
+    }
+
+    pub fn cursor_mut(&mut self) -> Cursor<'_, T> {
+        Cursor {
+            next: self.head,
+            previous: None,
+            list: self
         }
     }
 }
@@ -120,15 +137,41 @@ impl<T> Drop for LinkedList<T> {
     }
 }
 
-pub struct Cursor<'a, T>
-{
+pub struct Cursor<'a, T> {
     next: NodeLink<T>,
     previous: NodeLink<T>,
     list: &'a mut LinkedList<T>,
-    //_phantom: PhantomData<&'a T>,
 }
 
 impl<'a, T> Cursor<'a, T> {
+    pub fn next_data(&self) -> Option<&'a T> {
+        self.next.map(|node| data!(node))
+    }
+
+    pub fn previous_data(&self) -> Option<&'a T> {
+        self.previous.map(|node| data!(node))
+    }
+
+    pub fn move_next(&mut self) {
+        if let Some(next) = self.next {
+            // Set next to nexts next
+            self.next = next_unsafe!(next);
+
+            // Set previous to next
+            self.previous = Some(next);
+        }
+    }
+
+    pub fn move_previous(&mut self) {
+        if let Some(previous) = self.previous {
+            // Set previous to previous' previous
+            self.previous = previous_unsafe!(previous);
+
+            // Set next to previous
+            self.next = Some(previous);
+        }
+    }
+
     pub fn push(&mut self, data: T) {
         let new_head = LinkedList::new_node_link(data);
 
@@ -172,13 +215,13 @@ impl<'a, T> Cursor<'a, T> {
     }
 }
 
-pub struct Iter<'a, T>
-{
+pub struct Iter<'a, T> {
     current: NodeLink<T>,
+    length: usize,
     _phantom: PhantomData<&'a T>,
 }
 
-impl <'a, T> Iterator for Iter<'a, T> {
+impl<'a, T> Iterator for Iter<'a, T> {
     type Item = &'a T;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -187,6 +230,12 @@ impl <'a, T> Iterator for Iter<'a, T> {
 
             data!(node)
         })
+    }
+}
+
+impl<'a, T> ExactSizeIterator for Iter<'a, T> {
+    fn len(&self) -> usize {
+        self.length
     }
 }
 
@@ -355,10 +404,38 @@ mod tests {
         linked_list.push_back(String::from("bar"));
         linked_list.insert(1, String::from("baz"));
 
+
         let mut linked_list_iter = linked_list.iter();
         assert_eq!(linked_list_iter.next().unwrap().as_str(), "foo");
         assert_eq!(linked_list_iter.next().unwrap().as_str(), "bar");
         assert_eq!(linked_list_iter.next().unwrap().as_str(), "baz");
         assert_eq!(linked_list_iter.next(), None);
+    }
+
+    #[test]
+    fn test_cursor_move() {
+        let mut linked_list = LinkedList::<u32>::new();
+
+        linked_list.push_back(1337);
+        linked_list.push_back(42);
+        linked_list.push_back(666);
+
+        let mut cursor = linked_list.cursor_mut();
+        assert_eq!(cursor.next_data(), Some(&1337));
+        cursor.move_next();
+        assert_eq!(cursor.next_data(), Some(&42));
+        cursor.move_next();
+        assert_eq!(cursor.next_data(), Some(&666));
+        cursor.move_next();
+        assert_eq!(cursor.next_data(), None);
+
+        // Aaaaand back again
+        assert_eq!(cursor.previous_data(), Some(&666));
+        cursor.move_previous();
+        assert_eq!(cursor.previous_data(), Some(&42));
+        cursor.move_previous();
+        assert_eq!(cursor.previous_data(), Some(&1337));
+        cursor.move_previous();
+        assert_eq!(cursor.previous_data(), None);
     }
 }
