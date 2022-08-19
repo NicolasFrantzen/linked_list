@@ -1,5 +1,6 @@
 use std::ptr::NonNull;
 use std::marker::PhantomData;
+use std::iter::zip;
 
 use crate::node::{Node, NodeLink, NodeLinkSome};
 use crate::{next_unsafe, next, previous, data, previous_unsafe};
@@ -14,6 +15,14 @@ pub struct LinkedList<T> {
 impl<T> Default for LinkedList<T> {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+impl<T: PartialEq> PartialEq for LinkedList<T> {
+    fn eq(&self, other: &Self) -> bool {
+        zip(self.iter(), other.iter()).all(|(x,y)| {
+            x == y
+        })
     }
 }
 
@@ -61,57 +70,13 @@ impl<T> LinkedList<T> {
     }
 
     pub fn pop_front(&mut self) -> Option<T> {
-        self.head.map(|node| unsafe {
-            // Set head to the current heads next node
-            self.head = next!(node);
-
-            // Set the new head previous to the old heads previous
-            // I.e. at end of the list its None
-            if let Some(head) = self.head {
-                previous!(head) = previous!(node);
-            }
-
-            // Restore the node as a box and move its data
-            let boxed_data = Box::from_raw(node.as_ptr()).data;
-
-            self.length -= 1;
-
-            // If the length is now 1, we need head to be equal foot
-            // If the length is now 0, we need head and foot to be None
-            if self.length <= 1
-            {
-                self.foot = self.head;
-            }
-
-            boxed_data
-        })
+        Cursor {next: self.head, previous: None, list: self}
+            .pop_front()
     }
 
     pub fn pop_back(&mut self) -> Option<T> {
-        self.foot.map(|node| unsafe {
-            // Set foot to the current foods previous node
-            self.foot = previous!(node);
-
-            // Set the new foot next to the old heads next
-            // I.e. at end of the list its None
-            if let Some(foot) = self.foot {
-                next!(foot) = next!(node)
-            }
-
-            // Restore the node as a box and move its data
-            let boxed_data = Box::from_raw(node.as_ptr()).data;
-
-            self.length -= 1;
-
-            // If the length is now 1, we need head to be equal foot
-            // If the length is now 0, we need head and foot to be None
-            if self.length <= 1
-            {
-                self.head = self.foot;
-            }
-
-            boxed_data
-        })
+        Cursor {next: None, previous: self.foot, list: self}
+            .pop_back()
     }
 
     pub fn iter(&'_ self) -> Iter<'_, T> {
@@ -213,6 +178,60 @@ impl<'a, T> Cursor<'a, T> {
         // Update head and length
         self.list.length += 1;
     }
+
+    pub fn pop_front(&mut self) -> Option<T> {
+        self.list.head.map(|node| unsafe {
+            // Set head to the current heads next node
+            self.list.head = next!(node);
+
+            // Set the new head previous to the old heads previous
+            // I.e. at end of the list its None
+            if let Some(head) = self.list.head {
+                previous!(head) = previous!(node);
+            }
+
+            // Restore the node as a box and move its data
+            let boxed_data = Box::from_raw(node.as_ptr()).data;
+
+            self.list.length -= 1;
+
+            // If the length is now 1, we need head to be equal foot
+            // If the length is now 0, we need head and foot to be None
+            if self.list.length <= 1
+            {
+                self.list.foot = self.list.head;
+            }
+
+            boxed_data
+        })
+    }
+
+    pub fn pop_back(&mut self) -> Option<T> {
+        self.list.foot.map(|node| unsafe {
+            // Set foot to the current foods previous node
+            self.list.foot = previous!(node);
+
+            // Set the new foot next to the old heads next
+            // I.e. at end of the list its None
+            if let Some(foot) = self.list.foot {
+                next!(foot) = next!(node)
+            }
+
+            // Restore the node as a box and move its data
+            let boxed_data = Box::from_raw(node.as_ptr()).data;
+
+            self.list.length -= 1;
+
+            // If the length is now 1, we need head to be equal foot
+            // If the length is now 0, we need head and foot to be None
+            if self.list.length <= 1
+            {
+                self.list.head = self.list.foot;
+            }
+
+            boxed_data
+        })
+    }
 }
 
 pub struct Iter<'a, T> {
@@ -238,7 +257,6 @@ impl<'a, T> ExactSizeIterator for Iter<'a, T> {
         self.length
     }
 }
-
 
 #[cfg(test)]
 mod tests {
@@ -269,6 +287,22 @@ mod tests {
         assert_eq!(linked_list.len(), 1);
         linked_list.push_back(42);
         assert_eq!(linked_list.len(), 2);
+    }
+
+    #[test]
+    fn test_partial_eq() {
+        let mut linked_list = LinkedList::<u32>::new();
+        linked_list.push_front(1337);
+        linked_list.push_front(42);
+
+        let mut other_linked_list = LinkedList::<u32>::new();
+        other_linked_list.push_front(1337);
+        other_linked_list.push_front(42);
+
+        assert_eq!(linked_list, other_linked_list);
+        other_linked_list.push_front(666);
+
+        assert_ne!(linked_list, other_linked_list);
     }
 
     #[test]

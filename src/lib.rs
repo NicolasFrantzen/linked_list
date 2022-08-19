@@ -42,3 +42,19 @@ macro_rules! previous_unsafe {
         unsafe { previous!($node) }
     );
 }
+
+#[macro_export]
+macro_rules! linkedlist {
+    () => (
+        linked_list::new()
+    );
+    // match val, val, ...
+    ($($val:expr$(,)?)+) => (
+        {
+            let mut list = $crate::linked_list::LinkedList::new();
+            $(list.push_back($val);)*
+
+            list
+        }
+    );
+}
