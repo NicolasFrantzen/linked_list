@@ -1,5 +1,5 @@
 use std::ptr::NonNull;
-
+use std::fmt;
 
 pub type NodeLinkSome<T> = NonNull<Node<T>>;
 pub type NodeLink<T> = Option<NodeLinkSome<T>>;
@@ -17,6 +17,12 @@ impl<T> Node<T> {
     }
 }
 
+impl<T: fmt::Display> fmt::Display for Node<T> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.data)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -24,5 +30,12 @@ mod tests {
     #[test]
     fn test_node() {
         let _node = Node::new("hej");
+    }
+
+    #[test]
+    fn test_fmt() {
+        let node = Node::new(1337);
+
+        assert_eq!(format!("{node}"), "1337");
     }
 }

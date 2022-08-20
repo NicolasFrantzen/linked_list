@@ -1,6 +1,7 @@
 use std::ptr::NonNull;
 use std::marker::PhantomData;
 use std::iter::zip;
+use std::fmt;
 
 use crate::node::{Node, NodeLink, NodeLinkSome};
 use crate::{next_unsafe, next, previous, data, previous_unsafe};
@@ -23,6 +24,16 @@ impl<T: PartialEq> PartialEq for LinkedList<T> {
         zip(self.iter(), other.iter()).all(|(x,y)| {
             x == y
         })
+    }
+}
+
+impl<T: fmt::Display> fmt::Display for LinkedList<T> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let format_str = self.iter()
+            .map(|x| format!("{}, ", x))
+            .collect::<String>();
+
+        write!(f, "{}", format_str)
     }
 }
 
@@ -258,6 +269,31 @@ impl<'a, T> ExactSizeIterator for Iter<'a, T> {
     }
 }
 
+pub struct IntoIter<T> {
+    list: LinkedList<T>,
+}
+
+impl<T> Iterator for IntoIter<T> {
+    type Item = T;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.list.pop_front()
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        (self.list.len(), Some(self.list.len()))
+    }
+}
+
+impl<T> IntoIterator for LinkedList<T> {
+    type Item = T;
+    type IntoIter = IntoIter<T>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        IntoIter { list: self }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -306,6 +342,18 @@ mod tests {
     }
 
     #[test]
+    fn test_display() {
+        let mut linked_list = LinkedList::<u32>::new();
+        assert_eq!(format!("{linked_list}"), "");
+
+        linked_list.push_front(1337);
+        linked_list.push_front(42);
+        linked_list.push_front(666);
+
+        assert_eq!(format!("{linked_list}"), "666, 42, 1337, ");
+    }
+
+    #[test]
     fn test_iter() {
         let mut linked_list = LinkedList::<u32>::new();
         linked_list.push_front(1337);
@@ -316,6 +364,21 @@ mod tests {
         assert_eq!(linked_list_iter.next(), Some(&42));
         assert_eq!(linked_list_iter.next(), Some(&1337));
         assert_eq!(linked_list_iter.next(), Some(&666));
+        assert_eq!(linked_list_iter.next(), None);
+    }
+
+    #[test]
+    fn test_into_iter() {
+        let mut linked_list = LinkedList::<u32>::new();
+        linked_list.push_front(1337);
+        linked_list.push_front(42);
+        linked_list.push_back(666);
+
+        let mut linked_list_iter = linked_list.into_iter();
+        assert_eq!(linked_list_iter.size_hint(), (3, Some(3)));
+        assert_eq!(linked_list_iter.next(), Some(42));
+        assert_eq!(linked_list_iter.next(), Some(1337));
+        assert_eq!(linked_list_iter.next(), Some(666));
         assert_eq!(linked_list_iter.next(), None);
     }
 
