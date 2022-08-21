@@ -1,20 +1,26 @@
 pub mod node;
 pub mod linked_list;
 
+/// Get data from node
+#[doc(hidden)]
 #[macro_export(local_inner_macros)]
-macro_rules! data_unsafe {
+macro_rules! data {
     ($node:ident) => (
         &(*$node.as_ptr()).data
     );
 }
 
+/// Unsafe get data from node
+#[doc(hidden)]
 #[macro_export(local_inner_macros)]
-macro_rules! data {
+macro_rules! data_unsafe {
     ($node:ident) => (
-        unsafe{ data_unsafe!($node) }
+        unsafe{ data!($node) }
     );
 }
 
+/// Get next node
+#[doc(hidden)]
 #[macro_export(local_inner_macros)]
 macro_rules! next {
     ($node:ident) => (
@@ -22,6 +28,8 @@ macro_rules! next {
     );
 }
 
+/// Unsafe get next node
+#[doc(hidden)]
 #[macro_export(local_inner_macros)]
 macro_rules! next_unsafe {
     ($node:ident) => (
@@ -29,6 +37,8 @@ macro_rules! next_unsafe {
     );
 }
 
+/// Get previous node
+#[doc(hidden)]
 #[macro_export(local_inner_macros)]
 macro_rules! previous {
     ($node:ident) => (
@@ -36,6 +46,8 @@ macro_rules! previous {
     );
 }
 
+/// Unsafe get previous node
+#[doc(hidden)]
 #[macro_export(local_inner_macros)]
 macro_rules! previous_unsafe {
     ($node:ident) => (
@@ -43,6 +55,24 @@ macro_rules! previous_unsafe {
     );
 }
 
+/// Creates a LinkedList containing the arguments.
+///
+/// Create a LinkedLIst using list syntax:
+/// ```
+/// # #[macro_use] extern crate doubly_linked_list;
+/// let list = linkedlist!("foo", "bar", "baz");
+///
+/// let mut list_iter = list.iter();
+/// assert_eq!(list_iter.next(), Some(&"foo"));
+/// assert_eq!(list_iter.next(), Some(&"bar"));
+/// assert_eq!(list_iter.next(), Some(&"baz"));
+/// assert_eq!(list_iter.next(), None);
+///
+/// assert_eq!(list.get(0), Some(&"foo"));
+/// assert_eq!(list.get(1), Some(&"bar"));
+/// assert_eq!(list.get(2), Some(&"baz"));
+/// assert_eq!(list.get(3), None);
+/// ```
 #[macro_export]
 macro_rules! linkedlist {
     () => (

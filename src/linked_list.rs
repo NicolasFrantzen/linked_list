@@ -1,40 +1,16 @@
 use std::ptr::NonNull;
 use std::marker::PhantomData;
-use std::iter::zip;
+use std::iter::{zip, FromIterator};
 use std::fmt;
 
 use crate::node::{Node, NodeLink, NodeLinkSome};
-use crate::{next_unsafe, next, previous, data, previous_unsafe};
+use crate::{next_unsafe, next, previous, data_unsafe, previous_unsafe};
 
 #[derive(Debug)]
 pub struct LinkedList<T> {
     head: NodeLink<T>,
     foot: NodeLink<T>,
     length: usize,
-}
-
-impl<T> Default for LinkedList<T> {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl<T: PartialEq> PartialEq for LinkedList<T> {
-    fn eq(&self, other: &Self) -> bool {
-        zip(self.iter(), other.iter()).all(|(x,y)| {
-            x == y
-        })
-    }
-}
-
-impl<T: fmt::Display> fmt::Display for LinkedList<T> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let format_str = self.iter()
-            .map(|x| format!("{}, ", x))
-            .collect::<String>();
-
-        write!(f, "{}", format_str)
-    }
 }
 
 impl<T> LinkedList<T> {
@@ -67,6 +43,13 @@ impl<T> LinkedList<T> {
             .push(data);
     }
 
+    pub fn get(&self, index: usize) -> Option<&T>
+    {
+        self.iter()
+            .skip(index)
+            .next()
+    }
+
     pub fn insert(&mut self, index: usize, data: T) {
         // Create cursor at front of the list
         let mut cursor = Cursor {
@@ -92,7 +75,8 @@ impl<T> LinkedList<T> {
 
     pub fn iter(&'_ self) -> Iter<'_, T> {
         Iter {
-            current: self.head,
+            current_front: self.head,
+            current_back: self.foot,
             length: self.length,
             _phantom: PhantomData,
         }
@@ -104,6 +88,45 @@ impl<T> LinkedList<T> {
             previous: None,
             list: self
         }
+    }
+}
+
+impl<T> Default for LinkedList<T> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl<T: PartialEq> PartialEq for LinkedList<T> {
+    fn eq(&self, other: &Self) -> bool {
+        zip(self.iter(), other.iter()).all(|(x,y)| {
+            x == y
+        })
+    }
+}
+
+impl<T> From<Vec<T>> for LinkedList<T> {
+    fn from(vec: Vec<T>) -> Self {
+        vec.into_iter().collect::<LinkedList<T>>()
+    }
+}
+
+impl<T> FromIterator<T> for LinkedList<T> {
+    fn from_iter<U: IntoIterator<Item = T>>(iter: U) -> Self {
+        let mut list = LinkedList::<T>::new();
+        iter.into_iter().for_each(|x| list.push_back(x));
+
+        list
+    }
+}
+
+impl<T: fmt::Display> fmt::Display for LinkedList<T> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let format_str = self.iter()
+            .map(|x| format!("{}, ", x))
+            .collect::<String>();
+
+        write!(f, "{}", format_str)
     }
 }
 
@@ -121,11 +144,11 @@ pub struct Cursor<'a, T> {
 
 impl<'a, T> Cursor<'a, T> {
     pub fn next_data(&self) -> Option<&'a T> {
-        self.next.map(|node| data!(node))
+        self.next.map(|node| data_unsafe!(node))
     }
 
     pub fn previous_data(&self) -> Option<&'a T> {
-        self.previous.map(|node| data!(node))
+        self.previous.map(|node| data_unsafe!(node))
     }
 
     pub fn move_next(&mut self) {
@@ -246,7 +269,8 @@ impl<'a, T> Cursor<'a, T> {
 }
 
 pub struct Iter<'a, T> {
-    current: NodeLink<T>,
+    current_front: NodeLink<T>,
+    current_back: NodeLink<T>,
     length: usize,
     _phantom: PhantomData<&'a T>,
 }
@@ -255,10 +279,10 @@ impl<'a, T> Iterator for Iter<'a, T> {
     type Item = &'a T;
 
     fn next(&mut self) -> Option<Self::Item> {
-        self.current.map(|node| {
-            self.current = next_unsafe!(node);
+        self.current_front.map(|node| {
+            self.current_front = next_unsafe!(node);
 
-            data!(node)
+            data_unsafe!(node)
         })
     }
 }
@@ -266,6 +290,16 @@ impl<'a, T> Iterator for Iter<'a, T> {
 impl<'a, T> ExactSizeIterator for Iter<'a, T> {
     fn len(&self) -> usize {
         self.length
+    }
+}
+
+impl<'a, T> DoubleEndedIterator for Iter<'a, T> {
+    fn next_back(&mut self) -> Option<Self::Item> {
+        self.current_back.map(|node| {
+            self.current_back = previous_unsafe!(node);
+
+            data_unsafe!(node)
+        })
     }
 }
 
@@ -294,6 +328,18 @@ impl<T> IntoIterator for LinkedList<T> {
     }
 }
 
+impl<T> ExactSizeIterator for IntoIter<T> {
+    fn len(&self) -> usize {
+        self.list.length
+    }
+}
+
+impl<T> DoubleEndedIterator for IntoIter<T> {
+    fn next_back(&mut self) -> Option<Self::Item> {
+        self.list.pop_back()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -307,7 +353,7 @@ mod tests {
 
     #[test]
     fn test_push_front() {
-        let mut linked_list = LinkedList::<u32>::new();
+        let mut linked_list = LinkedList::new();
 
         linked_list.push_front(1337);
         assert_eq!(linked_list.len(), 1);
@@ -317,7 +363,7 @@ mod tests {
 
     #[test]
     fn test_push_back() {
-        let mut linked_list = LinkedList::<u32>::new();
+        let mut linked_list = LinkedList::new();
 
         linked_list.push_back(1337);
         assert_eq!(linked_list.len(), 1);
@@ -327,11 +373,11 @@ mod tests {
 
     #[test]
     fn test_partial_eq() {
-        let mut linked_list = LinkedList::<u32>::new();
+        let mut linked_list = LinkedList::new();
         linked_list.push_front(1337);
         linked_list.push_front(42);
 
-        let mut other_linked_list = LinkedList::<u32>::new();
+        let mut other_linked_list = LinkedList::new();
         other_linked_list.push_front(1337);
         other_linked_list.push_front(42);
 
@@ -343,7 +389,7 @@ mod tests {
 
     #[test]
     fn test_display() {
-        let mut linked_list = LinkedList::<u32>::new();
+        let mut linked_list = LinkedList::new();
         assert_eq!(format!("{linked_list}"), "");
 
         linked_list.push_front(1337);
@@ -355,7 +401,7 @@ mod tests {
 
     #[test]
     fn test_iter() {
-        let mut linked_list = LinkedList::<u32>::new();
+        let mut linked_list = LinkedList::new();
         linked_list.push_front(1337);
         linked_list.push_front(42);
         linked_list.push_back(666);
@@ -368,8 +414,65 @@ mod tests {
     }
 
     #[test]
+    fn test_iter_double_ended() {
+        let mut linked_list = LinkedList::new();
+        linked_list.push_front(1337);
+        linked_list.push_front(42);
+        linked_list.push_front(666);
+
+        let mut linked_list_iter = linked_list.iter();
+        assert_eq!(linked_list_iter.next_back(), Some(&1337));
+        assert_eq!(linked_list_iter.next(), Some(&666));
+        assert_eq!(linked_list_iter.next_back(), Some(&42));
+        assert_eq!(linked_list_iter.next(), Some(&42));
+        assert_eq!(linked_list_iter.next_back(), Some(&666));
+        assert_eq!(linked_list_iter.next(), Some(&1337));
+        assert_eq!(linked_list_iter.next_back(), None);
+        assert_eq!(linked_list_iter.next(), None);
+    }
+
+    #[test]
+    fn test_into_iter_double_ended() {
+        let mut linked_list = LinkedList::new();
+        linked_list.push_front(1337);
+        linked_list.push_front(42);
+        linked_list.push_front(666);
+
+        let mut linked_list_iter = linked_list.into_iter();
+        assert_eq!(linked_list_iter.next_back(), Some(1337));
+        assert_eq!(linked_list_iter.next(), Some(666));
+        assert_eq!(linked_list_iter.next_back(), Some(42));
+        assert_eq!(linked_list_iter.next(), None);
+        assert_eq!(linked_list_iter.next_back(), None);
+    }
+
+    #[test]
+    fn test_from_iter() {
+        let vec = vec![1337, 42, 666];
+
+        let mut linked_list_iter = LinkedList::from_iter(vec.clone().into_iter())
+            .into_iter();
+        assert_eq!(linked_list_iter.next(), Some(1337));
+        assert_eq!(linked_list_iter.next(), Some(42));
+        assert_eq!(linked_list_iter.next(), Some(666));
+        assert_eq!(linked_list_iter.next(), None);
+    }
+
+    #[test]
+    fn test_from_vec() {
+        let vec = vec![1337, 42, 666];
+
+        let mut linked_list_iter = LinkedList::from(vec)
+            .into_iter();
+        assert_eq!(linked_list_iter.next(), Some(1337));
+        assert_eq!(linked_list_iter.next(), Some(42));
+        assert_eq!(linked_list_iter.next(), Some(666));
+        assert_eq!(linked_list_iter.next(), None);
+    }
+
+    #[test]
     fn test_into_iter() {
-        let mut linked_list = LinkedList::<u32>::new();
+        let mut linked_list = LinkedList::new();
         linked_list.push_front(1337);
         linked_list.push_front(42);
         linked_list.push_back(666);
@@ -384,7 +487,7 @@ mod tests {
 
     #[test]
     fn test_drop() {
-        let mut linked_list = LinkedList::<u32>::new();
+        let mut linked_list = LinkedList::new();
         linked_list.push_front(1337);
         linked_list.push_front(42);
         linked_list.push_back(666);
@@ -393,8 +496,21 @@ mod tests {
     }
 
     #[test]
+    fn test_get() {
+        let mut linked_list = LinkedList::new();
+        linked_list.push_front(1337);
+        linked_list.push_front(42);
+        linked_list.push_back(666);
+
+        assert_eq!(linked_list.get(0), Some(&42));
+        assert_eq!(linked_list.get(1), Some(&1337));
+        assert_eq!(linked_list.get(2), Some(&666));
+        assert_eq!(linked_list.get(3), None);
+    }
+
+    #[test]
     fn test_push_front_pop_front() {
-        let mut linked_list = LinkedList::<String>::new();
+        let mut linked_list = LinkedList::new();
         linked_list.push_front(String::from("foo"));
         linked_list.push_front(String::from("bar"));
         linked_list.push_front(String::from("baz"));
@@ -413,7 +529,7 @@ mod tests {
 
     #[test]
     fn test_push_back_pop_back() {
-        let mut linked_list = LinkedList::<String>::new();
+        let mut linked_list = LinkedList::new();
         linked_list.push_back(String::from("foo"));
         linked_list.push_back(String::from("bar"));
         linked_list.push_back(String::from("baz"));
@@ -428,7 +544,7 @@ mod tests {
 
     #[test]
     fn test_push_front_pop_back() {
-        let mut linked_list = LinkedList::<u32>::new();
+        let mut linked_list = LinkedList::new();
 
         linked_list.push_front(42);
         linked_list.push_front(1337);
@@ -445,7 +561,7 @@ mod tests {
 
     #[test]
     fn test_push_back_pop_front() {
-        let mut linked_list = LinkedList::<String>::new();
+        let mut linked_list = LinkedList::new();
         linked_list.push_back(String::from("foo"));
         linked_list.push_back(String::from("bar"));
         linked_list.push_back(String::from("baz"));
@@ -460,7 +576,7 @@ mod tests {
 
     #[test]
     fn test_pop_none() {
-        let mut linked_list = LinkedList::<String>::new();
+        let mut linked_list = LinkedList::<u32>::new();
 
         assert_eq!(linked_list.pop_front(), None);
         assert_eq!(linked_list.pop_back(), None);
@@ -470,7 +586,7 @@ mod tests {
 
     #[test]
     fn test_push_pop_alternate() {
-        let mut linked_list = LinkedList::<String>::new();
+        let mut linked_list = LinkedList::new();
         linked_list.push_back(String::from("foo"));
         linked_list.push_front(String::from("bar"));
 
@@ -483,7 +599,7 @@ mod tests {
 
     #[test]
     fn test_push_pop_alternate_2() {
-        let mut linked_list = LinkedList::<String>::new();
+        let mut linked_list = LinkedList::new();
         linked_list.push_front(String::from("foo"));
         linked_list.push_back(String::from("bar"));
 
@@ -496,7 +612,7 @@ mod tests {
 
     #[test]
     fn test_push_insert() {
-        let mut linked_list = LinkedList::<String>::new();
+        let mut linked_list = LinkedList::new();
         linked_list.push_back(String::from("foo"));
         linked_list.push_back(String::from("bar"));
         linked_list.insert(1, String::from("baz"));
@@ -511,7 +627,7 @@ mod tests {
 
     #[test]
     fn test_cursor_move() {
-        let mut linked_list = LinkedList::<u32>::new();
+        let mut linked_list = LinkedList::new();
 
         linked_list.push_back(1337);
         linked_list.push_back(42);
